@@ -1,0 +1,128 @@
+MODPATH="/data/adb/modules/enchaned-disable-thermal-universal"
+m="\033[1;31m"   # Merah
+h="\033[1;32m"   # Hijau
+k="\033[1;33m"   # Kuning
+b="\033[1;34m"   # Biru
+bl="\033[1;36m"  # Biru Muda
+p="\033[1;37m"   # Putih
+u="\033[1;35m"   # Ungu
+pu="\033[1;30m"  # Abu-abu
+c="\033[1;96m"   # Cyan Terang
+bg_m="\033[41m"  # Latar Belakang Merah
+bg_h="\033[42m"  # Latar Belakang Hijau
+bg_k="\033[43m"  # Latar Belakang Kuning
+bg_b="\033[44m"  # Latar Belakang Biru
+bg_bl="\033[46m" # Latar Belakang Biru Muda
+bg_p="\033[47m"  # Latar Belakang Putih
+bg_u="\033[45m"  # Latar Belakang Ungu
+bg_pu="\033[40m" # Latar Belakang Abu-abu
+res="\033[0m"
+
+##########################################################
+#                    COMMON FUNCTION                           
+##########################################################
+
+function apply() {
+if [ -f $2 ]; then
+    chmod 644 $2 >/dev/null 2>&1
+    echo $1 >$2 2>/dev/null
+    chmod 444 $2 >/dev/null 2>&1
+fi
+}
+
+
+
+
+##########################################################
+#                      SNAPDRAGON TWEAK                          
+##########################################################
+
+function performanceMode() {
+    
+    #Changing cpu govenor
+    echo "changing cpu governor"
+    for i in {0..7}; do
+        apply "performance" "/sys/devices/system/cpu/cpu${i}/cpufreq/scalling_governor"
+    done &
+
+    #Scalling cpu frequency
+    echo "scalling cpu frequency"
+    for i in {0..3}; do
+        cpufreq="$(cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq)"
+        apply "performance" "/sys/devices/system/cpu/cpu${i}/cpufreq/scalling_min_freq"
+    done &
+    for i in {4..7}; do
+        cpufreq="$(cat /sys/devices/system/cpu/cpu7/cpufreq/cpuinfo_max_freq)"
+        apply "performance" "/sys/devices/system/cpu/cpu${i}/cpufreq/scalling_min_freq"
+    done
+
+
+        #gpu tuner
+    local gpupath='/sys/class/kgsl/kgsl-3d0'
+    local gpumaxclock="$(cat $gpupath/max_freq)"
+    echo "changing gpu governor"
+    apply "performance" "/sys/kernel/gpu/governor"
+    sleep 0.5
+    echo "scalling gpu clock speed"
+    apply "$gpumaxclock" "/sys/kernel/gpu/gpu_min_clock"
+    sleep 0.5
+    echo "disabling gpu throttling"
+    apply "0" "$gpupath/throttling"
+    echo "setting up gpu powerlevel"
+    apply "0" "$gpupath/default_pwrlevel"
+
+}
+
+##########################################################
+#                      EXTRA FUNCTION                          
+##########################################################
+
+#!/bin/bash
+
+changeProp() {
+    local file="$1"
+    local key="$2"
+    local new_value="$3"
+
+    if [[ ! -f "$file" ]]; then
+        echo "File $file tidak ditemukan!"
+        return 1
+    fi
+
+    sed -i.bak "s|^$key=.*|$key=$new_value|" "$file"
+
+    if [[ $? -eq 0 ]]; then
+        echo "Nilai untuk '$key' telah diubah menjadi '$new_value'."
+    else
+        echo "Terjadi kesalahan saat mengedit file."
+    fi
+}
+
+printProp() {
+    local file="$1"
+    local key="$2"
+    if [[ ! -f "$file" ]]; then
+        echo "File $file tidak ditemukan!"
+        return 1
+    fi
+
+    local value=$(grep "^$key=" "$file" | sed "s/^$key=//")
+    if [[ -n "$value" ]]; then
+        echo "$value"
+    else
+        echo "Properti '$key' tidak ditemukan dalam file $file."
+    fi
+}
+
+
+case "$1" in
+    --performance)
+        echo "Mode performa diaktifkan."
+        ;;
+    "")
+        echo "Mode performa tidak diaktifkan."
+        ;;
+    *)
+        usage
+        ;;
+esac
